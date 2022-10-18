@@ -53,7 +53,7 @@
 
 void checkSizes(int &N, int &M, int &S, int &nrepeat);
 
-static double num_threads = 2;
+static int num_threads = 2;
 
 int main(int argc, char *argv[])
 {
@@ -132,9 +132,13 @@ int main(int argc, char *argv[])
 
     double result = 0.0;
 
+#pragma omp parallel for reduction(+ \
+                                   : result) shared(A, x, y) num_threads(num_threads)
     for (int i = 0; i < N; i++)
     {
       double mult = 0.0;
+#pragma omp simd reduction(+ \
+                           : mult)
       for (int j = 0; j < M; j++)
       {
         mult += A[i][j] * x[j];
@@ -171,7 +175,7 @@ int main(int argc, char *argv[])
   double Gbytes = 1.0e-9 * double(sizeof(double) * (M + M * N + N));
 
   std::ofstream file;
-  file.open("metrics_part_2.csv", std::ios_base::app);
+  file.open("metrics_part_2_simd.csv", std::ios_base::app);
 
   // Print results (problem size, time and bandwidth in GB/s).
   // printf("  N( %d ) M( %d ) nrepeat ( %d ) problem( %g MB ) time( %g s ) bandwidth( %g GB/s )\n",
