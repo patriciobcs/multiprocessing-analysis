@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
    free(p);
 
    std::ofstream file;
-   file.open("metrics_part_3.csv", std::ios_base::app);
+   file.open("fib.csv", std::ios_base::app);
 
    file << num_threads << "," << N << "," << time << "\n";
 

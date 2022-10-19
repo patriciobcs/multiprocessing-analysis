@@ -53,7 +53,7 @@
 
 void checkSizes(long &N, long &M, long &S, int &nrepeat);
 
-static double num_threads = 1;
+static int num_threads = 1;
 
 int main(int argc, char *argv[])
 {
@@ -108,6 +108,9 @@ int main(int argc, char *argv[])
   std::vector<double> y(N, 1);
   std::vector<std::vector<double>> A(N, std::vector<double>(M, 1));
 
+  // std::generate(std::begin(x), std::end(x), [n = 0]() mutable
+  //               { return n++; });
+
   // Initialize y vector to 1.
 
   // Initialize x vector to 1.
@@ -129,10 +132,14 @@ int main(int argc, char *argv[])
 
     double result = 0.0;
 
-    for (long i = 0; i < N; i++)
+#pragma omp parallel for reduction(+ \
+                                   : result) shared(A, x, y) num_threads(num_threads)
+    for (int i = 0; i < N; i++)
     {
       double mult = 0.0;
-      for (long j = 0; j < M; j++)
+#pragma omp simd reduction(+ \
+                           : mult)
+      for (int j = 0; j < M; j++)
       {
         mult += A[i][j] * x[j];
       }
@@ -168,7 +175,11 @@ int main(int argc, char *argv[])
   double Gbytes = 1.0e-9 * double(sizeof(double) * (M + M * N + N));
 
   std::ofstream file;
-  file.open("metrics_part_2.csv", std::ios_base::app);
+  file.open("vector_simd.csv", std::ios_base::app);
+
+  // Print results (problem size, time and bandwidth in GB/s).
+  // printf("  N( %d ) M( %d ) nrepeat ( %d ) problem( %g MB ) time( %g s ) bandwidth( %g GB/s )\n",
+  //        N, M, nrepeat, Gbytes * 1000, time, Gbytes * nrepeat / time);
 
   file << num_threads << "," << nrepeat << "," << N << "," << M << "," << Gbytes << "," << time << std::endl;
 
