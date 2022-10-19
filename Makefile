@@ -19,20 +19,16 @@ p1:
 p2:
 	echo "num_threads,nrepeat,N,M,Gbytes,time" > metrics_part_2.csv
 	$(CPP) $(CPPFLAGS) -o part_2_vector tp_openmp_part_2_vector.cpp
-	for N in 2 4 8 10 12 14 16 ; do \
-			for M in 1 3 7 9 11 13 15 ; do \
-					./part_2_vector -N $$N -M $$M; \
-			done ; \
+	for i in 2 4 8 10 12 14 15 ; do \
+		./part_2_vector -N $$i -M $$(expr $$i - 1); \
 	done ; \
 
 p2omp:
 	echo "num_threads,nrepeat,N,M,Gbytes,time" > metrics_part_2_omp.csv
 	$(CPP) $(CPPFLAGS) -o part_2_vector_omp tp_openmp_part_2_vector_omp.cpp
 	for threads in 1 2 4 8 ; do \
-		for N in 2 4 8 10 12 14 16 ; do \
-			for M in 1 3 7 9 11 13 15 ; do \
-					./part_2_vector_omp -N $$N -M $$M -threads $$threads; \
-			done ; \
+		for i in 2 4 8 10 12 14 15 ; do \
+			./part_2_vector_omp -N $$i -M $$(expr $$i - 1) -threads $$threads; \
 		done ; \
 	done ; \
 
@@ -40,17 +36,18 @@ p2simd:
 	echo "num_threads,nrepeat,N,M,Gbytes,time" > metrics_part_2_simd.csv
 	$(CPP) $(CPPFLAGS) -o part_2_vector_simd tp_openmp_part_2_vector_simd.cpp
 	for threads in 1 2 4 8 ; do \
-		for N in 2 4 8 10 12 14 16 ; do \
-			for M in 1 3 7 9 11 13 15 ; do \
-					./part_2_vector_simd -N $$N -M $$M -threads $$threads; \
-			done ; \
+		for i in 2 4 8 10 12 14 15 ; do \
+			./part_2_vector_simd -N $$i -M $$(expr $$i - 1) -threads $$threads; \
 		done ; \
 	done ; \
 
 p3:
+	echo "num_threads,N,time" > metrics_part_3.csv
 	$(CPP) $(CPPFLAGS) -o part_3_fib tp_openmp_part_3_fib.cpp
-	export OMP_NUM_THREADS=$(NUM_THREADS); ./part_3_fib
+	for threads in 1 2 4 8 ; do \
+		./part_3_fib -threads $$threads; \
+	done ; \
 
 p4:
 	$(CPP) $(CPPFLAGS) -o part_4_matrix_mul tp_openmp_part_4_matrix_mul.cpp
-	export OMP_NUM_THREADS=$(NUM_THREADS); ./part_4_matrix_mul
+	./part_4_matrix_mul

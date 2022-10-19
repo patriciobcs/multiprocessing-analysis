@@ -51,15 +51,15 @@
 #include <fstream>
 #include <cmath>
 
-void checkSizes(int &N, int &M, int &S, int &nrepeat);
+void checkSizes(long &N, long &M, long &S, int &nrepeat);
 
-static double num_threads = 2;
+static double num_threads = 1;
 
 int main(int argc, char *argv[])
 {
-  int N = -1;        // number of rows 2^12
-  int M = -1;        // number of columns 2^10
-  int S = -1;        // total size 2^22
+  long N = -1;       // number of rows 2^12
+  long M = -1;       // number of columns 2^10
+  long S = -1;       // total size 2^22
   int nrepeat = 100; // number of repeats of the test
 
   // Read command line arguments.
@@ -68,17 +68,17 @@ int main(int argc, char *argv[])
     if ((strcmp(argv[i], "-N") == 0) || (strcmp(argv[i], "-Rows") == 0))
     {
       N = pow(2, atoi(argv[++i]));
-      printf("  User N is %d\n", N);
+      printf("  User N is %ld\n", N);
     }
     else if ((strcmp(argv[i], "-M") == 0) || (strcmp(argv[i], "-Columns") == 0))
     {
       M = pow(2, atof(argv[++i]));
-      printf("  User M is %d\n", M);
+      printf("  User M is %ld\n", M);
     }
     else if ((strcmp(argv[i], "-S") == 0) || (strcmp(argv[i], "-Size") == 0))
     {
       S = pow(2, atof(argv[++i]));
-      printf("  User S is %d\n", S);
+      printf("  User S is %ld\n", S);
     }
     else if (strcmp(argv[i], "-nrepeat") == 0)
     {
@@ -108,9 +108,6 @@ int main(int argc, char *argv[])
   std::vector<double> y(N, 1);
   std::vector<std::vector<double>> A(N, std::vector<double>(M, 1));
 
-  // std::generate(std::begin(x), std::end(x), [n = 0]() mutable
-  //               { return n++; });
-
   // Initialize y vector to 1.
 
   // Initialize x vector to 1.
@@ -132,10 +129,10 @@ int main(int argc, char *argv[])
 
     double result = 0.0;
 
-    for (int i = 0; i < N; i++)
+    for (long i = 0; i < N; i++)
     {
       double mult = 0.0;
-      for (int j = 0; j < M; j++)
+      for (long j = 0; j < M; j++)
       {
         mult += A[i][j] * x[j];
       }
@@ -145,7 +142,7 @@ int main(int argc, char *argv[])
     // Output result.
     if (repeat == (nrepeat - 1))
     {
-      printf("  Computed result for %d x %d is %lf\n", N, M, result);
+      printf("  Computed result for %ld x %ld is %lf\n", N, M, result);
     }
 
     const double solution = (double)N * (double)M;
@@ -173,10 +170,6 @@ int main(int argc, char *argv[])
   std::ofstream file;
   file.open("metrics_part_2.csv", std::ios_base::app);
 
-  // Print results (problem size, time and bandwidth in GB/s).
-  // printf("  N( %d ) M( %d ) nrepeat ( %d ) problem( %g MB ) time( %g s ) bandwidth( %g GB/s )\n",
-  //        N, M, nrepeat, Gbytes * 1000, time, Gbytes * nrepeat / time);
-
   file << num_threads << "," << nrepeat << "," << N << "," << M << "," << Gbytes << "," << time << std::endl;
 
   file.close();
@@ -184,7 +177,7 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-void checkSizes(int &N, int &M, int &S, int &nrepeat)
+void checkSizes(long &N, long &M, long &S, int &nrepeat)
 {
   // If S is undefined and N or M is undefined, set S to 2^22 or the bigger of N and M.
   if (S == -1 && (N == -1 || M == -1))
@@ -221,7 +214,7 @@ void checkSizes(int &N, int &M, int &S, int &nrepeat)
   if (N == -1)
     N = S / M;
 
-  printf("  Total size S = %d N = %d M = %d\n", S, N, M);
+  printf("  Total size S = %ld N = %ld M = %ld\n", S, N, M);
 
   // Check sizes.
   if ((S < 0) || (N < 0) || (M < 0) || (nrepeat < 0))
