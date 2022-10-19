@@ -8,6 +8,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <sys/time.h>
+#include <omp.h>
+#include <fstream>
+
+static int num_threads = 1;
 
 static int N = 5;
 
@@ -41,6 +45,7 @@ void processwork(struct node *p)
 {
    int n;
    n = p->data;
+
    p->fibdata = fib(n);
 }
 
@@ -76,6 +81,10 @@ int main(int argc, char *argv[])
          N = atoi(argv[++i]);
          printf("  User num_node is %d\n", N);
       }
+      else if (strcmp(argv[i], "-threads") == 0)
+      {
+         num_threads = atoi(argv[++i]);
+      }
       else if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "-help") == 0))
       {
          printf("  Fib Options:\n");
@@ -94,18 +103,25 @@ int main(int argc, char *argv[])
    printf("  Each ll node will compute %d fibonacci numbers beginning with %d\n", N, FS);
 
    p = init_list(p);
-   head = p;
 
    // Timer products.
    struct timeval begin, end;
 
    gettimeofday(&begin, NULL);
 
+#pragma omp parallel num_threads(num_threads)
    {
-      while (p != NULL)
+      head = p;
+#pragma omp single
       {
-         processwork(p);
-         p = p->next;
+         while (p != NULL)
+         {
+#pragma omp task firstprivate(p)
+            {
+               processwork(p);
+            }
+            p = p->next;
+         }
       }
    }
 
@@ -125,7 +141,11 @@ int main(int argc, char *argv[])
    }
    free(p);
 
-   printf("Compute Time: %f seconds\n", time);
+   std::ofstream file;
+   file.open("metrics_part_3.csv", std::ios_base::app);
 
+   file << num_threads << "," << N << "," << time << "\n";
+
+   file.close();
    return 0;
 }
