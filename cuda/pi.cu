@@ -19,28 +19,41 @@ History: Written by Tim Mattson, 11/1999.
 #include <omp.h>
 #include <fstream>
 
-static long num_steps = 10000000;
-static long num_threads = 2;
-double step;
-
-__global__ void calculate_pi(double *partial_pi, int n, double slice_size, double step)
+__global__ void calculate_pi(float *partial_pi, int n, int block_steps, int thread_steps, double step, long num_steps)
 {
+  extern __shared__ float partial_sum[];  
   double x = 0.0;
-  int j = blockIdx.x * blockDim.x + threadIdx.x;
-  double partial_sum = 0.0;
-  int start = 1 + j * slice_size;
-  int end = start + slice_size;
 
-  for (int i = start; i <= end; i++)
+  int tid = threadIdx.x;
+  int bid = blockIdx.x; 
+
+  long block_start = 1 + bid * block_steps;
+  // int block_end = block_start + block_steps;
+
+  long thread_start = block_start + thread_steps * tid;
+  long thread_end = thread_start + thread_steps;
+
+  partial_sum[tid] = 0;
+
+  for (long i = thread_start; i <= thread_end; i++)
   {
+    if (i > num_steps) {
+      break;
+    };
     x = (i - 0.5) * step;
-    partial_sum += 4.0 / (1.0 + x * x);
+    partial_sum[tid] += 4.0 / (1.0 + x * x);
   }
-  partial_pi[j] += partial_sum;
+
+  __syncthreads();
+  atomicAdd(&(partial_pi[bid]), partial_sum[tid]);
 }
 
 int main(int argc, char **argv)
 {
+  long num_steps = 10000000;
+  int threads = 2;
+  int thread_steps = 10;
+
   // Read command line arguments.
   for (int i = 0; i < argc; i++)
   {
@@ -51,7 +64,11 @@ int main(int argc, char **argv)
     }
     if ((strcmp(argv[i], "-t") == 0) || (strcmp(argv[i], "-threads") == 0))
     {
-      num_threads = atol(argv[++i]);
+      threads = atol(argv[++i]);
+    }
+    if ((strcmp(argv[i], "-ts") == 0) || (strcmp(argv[i], "-thread_steps") == 0))
+    {
+      thread_steps = atol(argv[++i]);
     }
     else if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "-help") == 0))
     {
@@ -63,25 +80,29 @@ int main(int argc, char **argv)
   }
 
   struct timeval begin, end;
-  double *partial_pi, *d_partial_pi; 
+  float *partial_pi, *d_partial_pi; 
   double pi, time = 0.0;
-  const int N = 100; // batches
-  const int slice_size = num_steps / N;
+  const int block_steps = thread_steps * threads;
+  const int N = ceil(num_steps / block_steps);
+  const int blocks = N;
+  const size_t block_mem_size = sizeof(float) * block_steps;
 
-  step = 1.0 / (double)num_steps;
+
+  double step = 1.0 / (double) num_steps;
+  printf("%i\n", N);
 
   gettimeofday(&begin, NULL);
 
   // Allocate host memory
-  partial_pi = (double*)malloc(sizeof(double) * N);
+  partial_pi = (float*)malloc(sizeof(float) * num_steps);
 
   // Allocate device memory
-  cudaMalloc((void**)&d_partial_pi, sizeof(double) * N);
+  cudaMalloc((void**)&d_partial_pi, sizeof(float) * num_steps);
 
-  calculate_pi<<<N, 1>>>(d_partial_pi, N, slice_size, step);
+  calculate_pi<<<blocks, threads, block_mem_size>>>(d_partial_pi, N, block_steps, thread_steps, step, num_steps);
 
   // Transfer data back to host memory
-  cudaMemcpy(partial_pi, d_partial_pi, sizeof(double) * N, cudaMemcpyDeviceToHost);
+  cudaMemcpy(partial_pi, d_partial_pi, sizeof(float) * N, cudaMemcpyDeviceToHost);
 
   for(int i = 0; i < N; i++){
     pi += partial_pi[i];
@@ -102,7 +123,7 @@ int main(int argc, char **argv)
   std::ofstream file;
   file.open("pi.csv", std::ios_base::app);
 
-  file << num_steps << "," << num_threads << "," << pi << "," << time << std ::endl;
+  file << num_steps << "," << blocks << "," << threads << "," << thread_steps << "," << pi << "," << time << std ::endl;
 
   file.close();
 }
