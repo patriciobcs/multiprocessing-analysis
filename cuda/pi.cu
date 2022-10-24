@@ -26,24 +26,21 @@ double step;
 __global__ void calculate_pi(double *partial_pi, int n, double slice_size, double step)
 {
   double x = 0.0;
-  for (int j = 0; j < n; j++)
-  {
-    double partial_sum = 0.0;
-    int start = 1 + j * slice_size;
-    int end = start + slice_size;
+  int j = blockIdx.x * blockDim.x + threadIdx.x;
+  double partial_sum = 0.0;
+  int start = 1 + j * slice_size;
+  int end = start + slice_size;
 
-    for (int i = start; i <= end; i++)
-    {
-      x = (i - 0.5) * step;
-      partial_sum += 4.0 / (1.0 + x * x);
-    }
-    partial_pi[j] += partial_sum;
+  for (int i = start; i <= end; i++)
+  {
+    x = (i - 0.5) * step;
+    partial_sum += 4.0 / (1.0 + x * x);
   }
+  partial_pi[j] += partial_sum;
 }
 
 int main(int argc, char **argv)
 {
-  int 
   // Read command line arguments.
   for (int i = 0; i < argc; i++)
   {
@@ -81,7 +78,7 @@ int main(int argc, char **argv)
   // Allocate device memory
   cudaMalloc((void**)&d_partial_pi, sizeof(double) * N);
 
-  calculate_pi<<<1, 1>>>(d_partial_pi, N, slice_size, step);
+  calculate_pi<<<N, 1>>>(d_partial_pi, N, slice_size, step);
 
   // Transfer data back to host memory
   cudaMemcpy(partial_pi, d_partial_pi, sizeof(double) * N, cudaMemcpyDeviceToHost);
