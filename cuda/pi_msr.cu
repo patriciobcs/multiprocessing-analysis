@@ -43,8 +43,16 @@ __global__ void calculate_pi(float *partial_pi, int n, int block_steps, int thre
     partial_sum[tid] += 4.0 / (1.0 + x * x);
   }
 
+  int batch = (int) block_steps / (2 * thread_steps);
+
   __syncthreads();
-  atomicAdd(&(partial_pi[bid]), partial_sum[tid]);
+  while (batch > 0) {
+    if (tid < batch) partial_sum[tid] += partial_sum[tid + batch];
+    __syncthreads();
+    batch = (int) batch / 2;
+  }
+
+  if (tid == 0) partial_pi[bid] = partial_sum[0];
 }
 
 int main(int argc, char **argv)
@@ -120,7 +128,7 @@ int main(int argc, char **argv)
           1.0e-6 * (end.tv_usec - begin.tv_usec);
 
   std::ofstream file;
-  file.open("pi.csv", std::ios_base::app);
+  file.open("pi_msr.csv", std::ios_base::app);
 
   file << num_steps << "," << blocks << "," << threads << "," << thread_steps << "," << pi << "," << time << std ::endl;
 
