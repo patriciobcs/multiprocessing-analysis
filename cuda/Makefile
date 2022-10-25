@@ -15,6 +15,19 @@ pi: FORCE
 		done ; \
 	done ; \
 
+pi_msr: FORCE
+	echo "num_steps,num_blocks,num_threads,thread_steps,result,runtime" > pi_msr.csv
+	$(NVCC) -o pi_msr pi_msr.cu
+	for threads in 1 32 64 128 256 ; do \
+		for threads in 1 64 256 1024 ; do \
+			for (( c=1000000; c<=100000000; c*=10 )) ; do \
+				for (( i=0; i<10; i++ )) ; do \
+					./pi_msr -num_steps $$c -threads $$threads; \
+				done ; \
+			done ; \
+		done ; \
+	done ; \
+
 vector: FORCE
 	echo "num_threads,nrepeat,N,M,Gbytes,time" > vector.csv
 	$(CPP) $(CPPFLAGS) -o vector vector.cpp

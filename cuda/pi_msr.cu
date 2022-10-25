@@ -19,7 +19,35 @@ History: Written by Tim Mattson, 11/1999.
 #include <omp.h>
 #include <fstream>
 
-__global__ void calculate_pi(float *partial_pi, int n, int block_steps, int thread_steps, double step, long num_steps)
+__global__ void calculate_pi(float *partial_pi, int n, int tds) {  
+  extern __shared__ float partial_sum[];
+  int tid = threadIdx.x;
+
+  partial_sum[tid] = 0.0;
+
+  if (tid < tds) {
+    for (long i = tid; i < n; i += tds) {
+      partial_sum[tid] += partial_pi[i];
+    }
+  }
+  __syncthreads();
+
+  tds /= 2;
+
+  while (tds > 0) {
+    if (tid < tds) {
+      for (long i = tid + 1; i < tds + 1; i += tds) {
+        partial_sum[tid] += partial_sum[i];
+      }
+    }
+    __syncthreads();
+    tds = (int) tds / 2;
+  }
+
+  if (tid == 0) partial_pi[0] = partial_sum[0];
+}
+
+__global__ void calculate_partial_pi(float *partial_pi, int n, int block_steps, int thread_steps, double step, long num_steps)
 {
   extern __shared__ float partial_sum[];  
   double x = 0.0;
@@ -93,7 +121,10 @@ int main(int argc, char **argv)
   const int N = ceil(num_steps / block_steps);
   const int blocks = N;
   const size_t block_mem_size = sizeof(float) * block_steps;
+  const size_t reduction_mem_size = sizeof(float) * threads;
   double step = 1.0 / (double) num_steps;
+  int tds = (int) threads / 2;
+  if (tds == 0) tds = 1;
 
   gettimeofday(&begin, NULL);
 
@@ -103,17 +134,17 @@ int main(int argc, char **argv)
   // Allocate device memory
   cudaMalloc((void**)&d_partial_pi, sizeof(float) * num_steps);
 
-  // Call device
-  calculate_pi<<<blocks, threads, block_mem_size>>>(d_partial_pi, N, block_steps, thread_steps, step, num_steps);
+  // Call device to calculate partial pi (reduction 1)
+  calculate_partial_pi<<<blocks, threads, block_mem_size>>>(d_partial_pi, N, block_steps, thread_steps, step, num_steps);
+
+  // Call device to calculate pi (reduction 2)
+  calculate_pi<<<1, threads, reduction_mem_size>>>(d_partial_pi, N, tds);
 
   // Transfer data back to host memory
   cudaMemcpy(partial_pi, d_partial_pi, sizeof(float) * N, cudaMemcpyDeviceToHost);
 
   // Get final result
-  for(int i = 0; i < N; i++){
-    pi += partial_pi[i];
-  }
-  pi *= step;
+  pi = partial_pi[0] * step;
 
   // Deallocate device memory
   cudaFree(d_partial_pi);
