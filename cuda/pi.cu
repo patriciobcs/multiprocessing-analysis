@@ -28,14 +28,13 @@ __global__ void calculate_pi(float *partial_pi, int n, int block_steps, int thre
   int bid = blockIdx.x; 
 
   long block_start = 1 + bid * block_steps;
-  // int block_end = block_start + block_steps;
 
   long thread_start = block_start + thread_steps * tid;
   long thread_end = thread_start + thread_steps;
 
   partial_sum[tid] = 0;
 
-  for (long i = thread_start; i <= thread_end; i++)
+  for (long i = thread_start; i < thread_end; i++)
   {
     if (i > num_steps) {
       break;
@@ -87,9 +86,7 @@ int main(int argc, char **argv)
   const int blocks = N;
   const size_t block_mem_size = sizeof(float) * block_steps;
 
-
   double step = 1.0 / (double) num_steps;
-  printf("%i\n", N);
 
   gettimeofday(&begin, NULL);
 
