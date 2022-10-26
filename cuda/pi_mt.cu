@@ -19,20 +19,21 @@ History: Written by Tim Mattson, 11/1999.
 #include <omp.h>
 #include <fstream>
 
-__global__ void calculate_pi(float *partial_pi, int n, double slice_size, double step)
+__global__ void calculate_pi(float *partial_pi, float *partial_sum, int n, double slice_size, double step)
 {
   float x = 0.0;
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  float partial_sum = 0.0;
+  float sum = 0.0;
   int start = 1 + tid * slice_size;
   int end = start + slice_size;
 
   for (int i = start; i <= end; i++)
   {
     x = (i - 0.5) * step;
-    partial_sum += 4.0 / (1.0 + x * x);
+    sum += 4.0 / (1.0 + x * x);
   }
-  partial_pi[tid] += partial_sum;
+
+  partial_sum[threadIdx.x] += sum;
 }
 
 int main(int argc, char **argv)
