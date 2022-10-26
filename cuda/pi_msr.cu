@@ -19,29 +19,23 @@ History: Written by Tim Mattson, 11/1999.
 #include <omp.h>
 #include <fstream>
 
-__global__ void calculate_pi(float *partial_pi, int n, int tds) {  
+__global__ void calculate_pi(float *partial_pi, int n, int threads) {  
   extern __shared__ float partial_sum[];
   int tid = threadIdx.x;
 
   partial_sum[tid] = 0.0;
 
-  if (tid < tds) {
-    for (long i = tid; i < n; i += tds) {
-      partial_sum[tid] += partial_pi[i];
-    }
+  for (long i = tid; i < n; i += threads) {
+    partial_sum[tid] += partial_pi[i];
   }
+
+  int batch = (int) threads / 2;
+
   __syncthreads();
-
-  tds /= 2;
-
-  while (tds > 0) {
-    if (tid < tds) {
-      for (long i = tid + 1; i < tds + 1; i += tds) {
-        partial_sum[tid] += partial_sum[i];
-      }
-    }
+  while (batch > 0) {
+    if (tid < batch) partial_sum[tid] += partial_sum[tid + batch];
     __syncthreads();
-    tds = (int) tds / 2;
+    batch = (int) batch / 2;
   }
 
   if (tid == 0) partial_pi[0] = partial_sum[0];
@@ -49,7 +43,8 @@ __global__ void calculate_pi(float *partial_pi, int n, int tds) {
 
 __global__ void calculate_partial_pi(float *partial_pi, int n, int block_steps, int thread_steps, double step, long num_steps)
 {
-  extern __shared__ float partial_sum[];  
+  extern __shared__ float partial_sum[];
+  float sum = 0.0;  
   double x = 0.0;
 
   int tid = threadIdx.x;
@@ -68,8 +63,10 @@ __global__ void calculate_partial_pi(float *partial_pi, int n, int block_steps, 
       break;
     };
     x = (i - 0.5) * step;
-    partial_sum[tid] += 4.0 / (1.0 + x * x);
+    sum += 4.0 / (1.0 + x * x);
   }
+
+  partial_sum[tid] = sum;
 
   int batch = (int) block_steps / (2 * thread_steps);
 
@@ -87,7 +84,7 @@ int main(int argc, char **argv)
 {
   long num_steps = 10000000;
   int threads = 2;
-  int thread_steps = 10;
+  int thread_steps = 2;
 
   // Read command line arguments.
   for (int i = 0; i < argc; i++)
@@ -120,11 +117,8 @@ int main(int argc, char **argv)
   const int block_steps = thread_steps * threads;
   const int N = ceil(num_steps / block_steps);
   const int blocks = N;
-  const size_t block_mem_size = sizeof(float) * block_steps;
-  const size_t reduction_mem_size = sizeof(float) * threads;
+  const size_t block_mem_size = sizeof(float) * threads;
   double step = 1.0 / (double) num_steps;
-  int tds = (int) threads / 2;
-  if (tds == 0) tds = 1;
 
   gettimeofday(&begin, NULL);
 
@@ -132,13 +126,18 @@ int main(int argc, char **argv)
   partial_pi = (float*)malloc(sizeof(float) * num_steps);
 
   // Allocate device memory
-  cudaMalloc((void**)&d_partial_pi, sizeof(float) * num_steps);
+  cudaError_t err = cudaMalloc((void**)&d_partial_pi, sizeof(float) * num_steps);
+  if (err != cudaSuccess) {
+    printf("%s in %s at line %d\n" , cudaGetErrorString(err));
+  }
 
   // Call device to calculate partial pi (reduction 1)
   calculate_partial_pi<<<blocks, threads, block_mem_size>>>(d_partial_pi, N, block_steps, thread_steps, step, num_steps);
 
+  cudaDeviceSynchronize();
+
   // Call device to calculate pi (reduction 2)
-  calculate_pi<<<1, threads, reduction_mem_size>>>(d_partial_pi, N, tds);
+  calculate_pi<<<1, threads, block_mem_size>>>(d_partial_pi, N, threads);
 
   // Transfer data back to host memory
   cudaMemcpy(partial_pi, d_partial_pi, sizeof(float) * N, cudaMemcpyDeviceToHost);
