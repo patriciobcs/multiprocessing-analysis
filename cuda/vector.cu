@@ -51,16 +51,25 @@
 #include <fstream>
 #include <cmath>
 
-void checkSizes(long &N, long &M, long &S, int &nrepeat);
+void checkSizes(long &N, long &M, long &S);
 
-static int num_threads = 1;
+__global__ void calculate(float *d_partial_result, const float *d_A, const float *d_x, const float *d_y, int M, int N) {
+  int i = blockIdx.x;
+
+  float mult = 0.0;
+  for (int j = 0; j < M; j++)
+  {
+    mult += d_A[i*M+j] * d_x[j];
+  }
+  d_partial_result[i] = mult * d_y[i];
+}
 
 int main(int argc, char *argv[])
 {
   long N = -1;       // number of rows 2^12
   long M = -1;       // number of columns 2^10
   long S = -1;       // total size 2^22
-  int nrepeat = 100; // number of repeats of the test
+  int num_threads = 1;
 
   // Read command line arguments.
   for (int i = 0; i < argc; i++)
@@ -80,10 +89,6 @@ int main(int argc, char *argv[])
       S = pow(2, atof(argv[++i]));
       printf("  User S is %ld\n", S);
     }
-    else if (strcmp(argv[i], "-nrepeat") == 0)
-    {
-      nrepeat = atoi(argv[++i]);
-    }
     else if (strcmp(argv[i], "-threads") == 0)
     {
       num_threads = atoi(argv[++i]);
@@ -94,69 +99,82 @@ int main(int argc, char *argv[])
       printf("  -Rows (-N) <int>:      exponent num, determines number of rows 2^num (default: 2^12 = 4096)\n");
       printf("  -Columns (-M) <int>:   exponent num, determines number of columns 2^num (default: 2^10 = 1024)\n");
       printf("  -Size (-S) <int>:      exponent num, determines total matrix size 2^num (default: 2^22 = 4096*1024 )\n");
-      printf("  -nrepeat <int>:        number of repetitions (default: 100)\n");
       printf("  -help (-h):            print this message\n\n");
       exit(1);
     }
   }
 
   // Check sizes.
-  checkSizes(N, M, S, nrepeat);
+  checkSizes(N, M, S);
 
-  // Allocate x,y,A
-  std::vector<double> x(M, 1);
-  std::vector<double> y(N, 1);
-  std::vector<std::vector<double>> A(N, std::vector<double>(M, 1));
+  float *partial_result, *d_partial_result;
 
-  // std::generate(std::begin(x), std::end(x), [n = 0]() mutable
-  //               { return n++; });
+  float *x, *y, *A, *d_x, *d_y, *d_A; 
 
-  // Initialize y vector to 1.
+  A = (float*)malloc(sizeof(float) * N*M);
+  x = (float*)malloc(sizeof(float) * M);
+  y = (float*)malloc(sizeof(float) * N);
 
-  // Initialize x vector to 1.
+  for (int m = 0; m < M; m++) {
+    for (int n = 0; n < N; n++) {
+      A[m*N+n] = 1;
+    }
+  } 
 
-  // Initialize A matrix, you can use a 1D index if you want a flat structure (i.e. a 1D array) e.g. j*M+i is the same than [j][i]
+  for (int m = 0; m < M; m++) {
+    x[m] = 1;
+  } 
 
-  // Timer products.
+  for (int n = 0; n < N; n++) {
+    y[n] = 1;
+  }
+
   struct timeval begin, end;
 
   gettimeofday(&begin, NULL);
 
-  for (int repeat = 0; repeat < nrepeat; repeat++)
-  {
-    // For each line i
-    // Multiply the i lines with the vector x
-    // Sum the results of the previous step into a single variable
-    // Multiply the result of the previous step with the i value of vector y
-    // Sum the results of the previous step into a single variable (result)
+  // Allocate host memory
+  partial_result = (float*)malloc(sizeof(float) * N);
 
-    double result = 0.0;
+  // Allocate device memory
+  cudaMalloc((void**)&d_partial_result, sizeof(float) * N);
+  cudaMalloc((void**)&d_x, sizeof(float) * M);
+  cudaMalloc((void**)&d_y, sizeof(float) * N);
+  cudaMalloc((void**)&d_A, sizeof(float) * M*N);
 
-#pragma omp parallel for reduction(+ \
-                                   : result) shared(A, x, y) num_threads(num_threads)
-    for (int i = 0; i < N; i++)
-    {
-      double mult = 0.0;
-      for (int j = 0; j < M; j++)
-      {
-        mult += A[i][j] * x[j];
-      }
-      result += mult * y[i];
-    }
+  // Transfer data to the device memory
+  cudaMemcpy(d_x, x, sizeof(float) * M, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_y, y, sizeof(float) * N, cudaMemcpyHostToDevice);
+  cudaMemcpy(d_A, A, sizeof(float) * M*N, cudaMemcpyHostToDevice);
 
-    // Output result.
-    if (repeat == (nrepeat - 1))
-    {
-      printf("  Computed result for %ld x %ld is %lf\n", N, M, result);
-    }
+  float result = 0.0;
 
-    const double solution = (double)N * (double)M;
+  calculate<<<N, 1>>>(d_partial_result, d_A, d_x, d_y, M, N);
 
-    if (result != solution)
-    {
-      printf("  Error: result( %lf ) != solution( %lf )\n", result, solution);
-    }
+  cudaDeviceSynchronize();
+
+  // Transfer data back to host memory
+  cudaMemcpy(partial_result, d_partial_result, sizeof(float) * N, cudaMemcpyDeviceToHost);
+
+  for (int i = 0; i < N; i++) {
+    result += partial_result[i];
   }
+
+  const float solution = (float) N * (float) M;
+
+  if (result != solution)
+  {
+    printf("  Error: result( %lf ) != solution( %lf )\n", result, solution);
+  }
+
+  // Deallocate device memory
+  cudaFree(d_partial_result);
+
+  // Deallocate host memory
+  free(partial_result);
+  free(x);
+  free(y);
+  free(A);
 
   gettimeofday(&end, NULL);
 
@@ -173,20 +191,20 @@ int main(int argc, char *argv[])
   double Gbytes = 1.0e-9 * double(sizeof(double) * (M + M * N + N));
 
   std::ofstream file;
-  file.open("metrics_part_2_omp.csv", std::ios_base::app);
+  file.open("vector.csv", std::ios_base::app);
 
   // Print results (problem size, time and bandwidth in GB/s).
   // printf("  N( %d ) M( %d ) nrepeat ( %d ) problem( %g MB ) time( %g s ) bandwidth( %g GB/s )\n",
   //        N, M, nrepeat, Gbytes * 1000, time, Gbytes * nrepeat / time);
 
-  file << num_threads << "," << nrepeat << "," << N << "," << M << "," << Gbytes << "," << time << std::endl;
+  file << num_threads << "," << N << "," << M << "," << Gbytes << "," << time << std::endl;
 
   file.close();
 
   return 0;
 }
 
-void checkSizes(long &N, long &M, long &S, int &nrepeat)
+void checkSizes(long &N, long &M, long &S)
 {
   // If S is undefined and N or M is undefined, set S to 2^22 or the bigger of N and M.
   if (S == -1 && (N == -1 || M == -1))
@@ -226,7 +244,7 @@ void checkSizes(long &N, long &M, long &S, int &nrepeat)
   printf("  Total size S = %ld N = %ld M = %ld\n", S, N, M);
 
   // Check sizes.
-  if ((S < 0) || (N < 0) || (M < 0) || (nrepeat < 0))
+  if ((S < 0) || (N < 0) || (M < 0))
   {
     printf("  Sizes must be greater than 0.\n");
     exit(1);
