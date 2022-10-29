@@ -132,7 +132,7 @@ int main(int argc, char **argv)
   std::ofstream file;
   file.open("pi_mt.csv", std::ios_base::app);
 
-  file << num_steps << "," << blocks << "," << 1 << "," << thread_steps << "," << pi << "," << time << std::endl;
+  file << num_steps << "," << blocks << "," << threads << "," << thread_steps << "," << pi << "," << time << std::endl;
 
   file.close();
 }

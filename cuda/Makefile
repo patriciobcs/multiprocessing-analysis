@@ -67,7 +67,7 @@ vector_atomic: FORCE
 	for threads in 1 2 4 8 ; do \
 		for i in 2 4 8 10 12 14 15 ; do \
 			for (( t=0; t<10; t++ )) ; do \
-				./vector_atomic -N $$i -M $$(expr $$i - 1) -t $$threads; \
+				./vector_atomic -N $$i -M $$(expr $$i - 1) -threads $$threads; \
 			done ; \
 		done ; \
 	done ; \
@@ -78,7 +78,7 @@ vector_shared: FORCE
 	for threads in 1 2 4 8 ; do \
 		for i in 2 4 8 10 12 14 15 ; do \
 			for (( t=0; t<10; t++ )) ; do \
-				./vector_shared -N $$i -M $$(expr $$i - 1) -t $$threads; \
+				./vector_shared -N $$i -M $$(expr $$i - 1) -threads $$threads; \
 			done ; \
 		done ; \
 	done ; \
