@@ -19,20 +19,22 @@ History: Written by Tim Mattson, 11/1999.
 #include <omp.h>
 #include <fstream>
 
-__global__ void calculate_pi(float *partial_pi, int n, double slice_size, double step)
+__global__ void calculate_pi(float *partial_pi, double thread_steps, double step, long num_steps)
 {
   float x = 0.0;
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  float partial_sum = 0.0;
-  int start = 1 + tid * slice_size;
-  int end = start + slice_size;
+  int bid = blockIdx.x;
+  float sum = 0.0;
+  int start = 1 + bid * thread_steps;
+  int end = start + thread_steps;
 
   for (int i = start; i <= end; i++)
   {
+    if (i > num_steps) break;
     x = (i - 0.5) * step;
-    partial_sum += 4.0 / (1.0 + x * x);
+    sum += 4.0 / (1.0 + x * x);
   }
-  partial_pi[tid] += partial_sum;
+
+  partial_pi[bid] = sum;
 }
 
 int main(int argc, char **argv)
@@ -48,10 +50,6 @@ int main(int argc, char **argv)
     {
       num_steps = atol(argv[++i]);
       printf("  User num_steps is %ld\n", num_steps);
-    }
-    if ((strcmp(argv[i], "-t") == 0) || (strcmp(argv[i], "-threads") == 0))
-    {
-      threads = atol(argv[++i]);
     }
     if ((strcmp(argv[i], "-ts") == 0) || (strcmp(argv[i], "-thread_steps") == 0))
     {
@@ -69,9 +67,9 @@ int main(int argc, char **argv)
   struct timeval begin, end;
   float *partial_pi, *d_partial_pi; 
   double pi, time = 0.0;
-  const int blocks = 100; // batches
-  const int slice_size = num_steps / blocks;
-  const double step = 1.0 / (double)num_steps;
+  const int block_steps = thread_steps * threads;
+  const int blocks = ceil(num_steps / block_steps);
+  const double step = 1.0 / (double) num_steps;
 
   gettimeofday(&begin, NULL);
 
@@ -82,7 +80,9 @@ int main(int argc, char **argv)
   cudaMalloc((void**)&d_partial_pi, sizeof(float) * blocks);
 
   // Call device
-  calculate_pi<<<blocks, 1>>>(d_partial_pi, blocks, slice_size, step);
+  calculate_pi<<<blocks, threads>>>(d_partial_pi, thread_steps, step, num_steps);
+
+  cudaDeviceSynchronize();
 
   // Transfer data back to host memory
   cudaMemcpy(partial_pi, d_partial_pi, sizeof(float) * blocks, cudaMemcpyDeviceToHost);
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
   std::ofstream file;
   file.open("pi.csv", std::ios_base::app);
 
-  file << num_steps << "," << blocks << "," << 1 << "," << thread_steps << "," << pi << "," << time << std ::endl;
+  file << num_steps << "," << blocks << "," << threads << "," << thread_steps << "," << pi << "," << time << std ::endl;
 
   file.close();
 }

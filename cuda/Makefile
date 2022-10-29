@@ -5,12 +5,10 @@ $(eval SHELL:=/bin/bash)
 pi: FORCE
 	echo "num_steps,num_blocks,num_threads,thread_steps,result,runtime" > pi.csv
 	$(NVCC) -o pi pi.cu
-	for threads in 1 32 64 128 256 ; do \
-		for thread_steps in 1 64 256 1024 ; do \
-			for (( c=1000000; c<=100000000; c*=10 )) ; do \
-				for (( i=0; i<10; i++ )) ; do \
-					./pi -N $$c -t $$threads -ts $$thread_steps; \
-				done ; \
+	for thread_steps in 1 64 256 1024 ; do \
+		for (( c=1000000; c<=100000000; c*=10 )) ; do \
+			for (( i=0; i<10; i++ )) ; do \
+				./pi -N $$c -ts $$thread_steps; \
 			done ; \
 		done ; \
 	done ; \
