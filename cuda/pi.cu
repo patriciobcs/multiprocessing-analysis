@@ -106,7 +106,7 @@ int main(int argc, char **argv)
           1.0e-6 * (end.tv_usec - begin.tv_usec);
 
   std::ofstream file;
-  file.open("pi_atomic.csv", std::ios_base::app);
+  file.open("pi.csv", std::ios_base::app);
 
   file << num_steps << "," << blocks << "," << 1 << "," << thread_steps << "," << pi << "," << time << std ::endl;
 

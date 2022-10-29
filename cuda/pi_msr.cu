@@ -126,10 +126,7 @@ int main(int argc, char **argv)
   partial_pi = (float*)malloc(sizeof(float) * num_steps);
 
   // Allocate device memory
-  cudaError_t err = cudaMalloc((void**)&d_partial_pi, sizeof(float) * num_steps);
-  if (err != cudaSuccess) {
-    printf("%s in %s at line %d\n" , cudaGetErrorString(err));
-  }
+  cudaMalloc((void**)&d_partial_pi, sizeof(float) * num_steps);
 
   // Call device to calculate partial pi (reduction 1)
   calculate_partial_pi<<<blocks, threads, block_mem_size>>>(d_partial_pi, N, block_steps, thread_steps, step, num_steps);
