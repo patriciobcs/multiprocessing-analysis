@@ -72,9 +72,16 @@ __global__ void calculate(float *d_partial_result, const float *d_A, const float
 
   partial_mult[tid] = mult * d_y[bid];
   
-  __syncthreads();
+  int tbatch = blockDim.x; 
 
-  atomicAdd(&(d_partial_result[bid]), mult);
+  __syncthreads();
+  while (tbatch > 0) {
+    if (tid < tbatch) partial_mult[tid] += partial_mult[tid + tbatch];
+    __syncthreads();
+    tbatch = (int) tbatch / 2;
+  }
+
+  if (tid == 0) d_partial_result[bid] = partial_mult[0];
 }
 
 int main(int argc, char *argv[])
